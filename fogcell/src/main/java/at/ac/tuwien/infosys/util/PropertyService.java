@@ -15,6 +15,7 @@ import java.util.Set;
 
 /**
  * Created by Kevin Bachmann on 29/11/2016.
+ * Modified by Olena Skarlat
  * Service to read properties from the additional "main.properties" file
  */
 @Service

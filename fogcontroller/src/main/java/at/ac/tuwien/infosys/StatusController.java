@@ -44,7 +44,7 @@ public class StatusController {
     @RequestMapping(method = RequestMethod.GET)
     public String getPage(){
         String html = "<html><head></head><body style='background: white; color: black; font-family: Verdana'>" +
-                "<h1>Cloud-Fog Middleware Status-Page</h1>";
+                "<h1>Fof Controller Status Page</h1>";
         html+="<p>  LOCAL DB  ------------------------------------------------------------------------------------------------------------------------</p>";
         html+="<ul>";
         html+="<li><b>Id:</b> "+dbService.getDeviceId()+"</li>";

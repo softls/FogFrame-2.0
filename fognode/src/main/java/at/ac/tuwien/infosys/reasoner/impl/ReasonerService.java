@@ -14,6 +14,7 @@ import at.ac.tuwien.infosys.util.Constants;
 import at.ac.tuwien.infosys.util.DeviceType;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Primary;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
@@ -23,6 +24,8 @@ import java.util.*;
 /**
  * Created by Kevin Bachmann on 13/12/2016. One colony
  */
+
+@Primary
 @Service
 @Slf4j
 public class ReasonerService implements IReasonerService {
@@ -71,13 +74,29 @@ public class ReasonerService implements IReasonerService {
      */
     private boolean isReplanning = false;
 
+    // a class for tracking deployment time of a number of services, not unique keys, keys- number of services, value- seconds
+    private class Pair
+    {
+        public Integer key;
+        public Double value;
+
+        public Pair(Integer key, Double value)
+        {
+            this.key = key;
+            this.value = value;
+        }
+
+    }
+
     // EVALUATION METRICS
     // +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
     private int totalRequestCount = 0;
     private int cloudRequestCount = 0;
     private HashMap<Integer, Double> deploymentTimes = new HashMap<Integer, Double>();
-    private HashMap<Integer, Double> fogdeploymentTimes = new HashMap<Integer, Double>();
-    private HashMap<Integer, Double> clouddeploymentTimes = new HashMap<Integer, Double>();
+    private List<Pair> fogdeploymentTimes = new ArrayList<>();
+    private List<Pair> clouddeploymentTimes = new ArrayList<>();
+    //private HashMap<Integer, Double> fogdeploymentTimes = new HashMap<Integer, Double>();
+    //private HashMap<Integer, Double> clouddeploymentTimes = new HashMap<Integer, Double>();
     // +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
     // EVALUATION METRICS
 
@@ -201,7 +220,7 @@ public class ReasonerService implements IReasonerService {
         long stopFogTime = System.nanoTime();
         long fogduration = stopFogTime - startFogTime;
         double seconds = ((double)fogduration / 1000000000);
-        fogdeploymentTimes.put(fogrequestCount, seconds);
+        fogdeploymentTimes.add(new Pair(fogrequestCount, seconds));
         String timeStr = new DecimalFormat("#.##########").format(seconds);
         log.info("fog service deployment time : " + timeStr + " Seconds for "+fogrequestCount+ " services");
 
@@ -238,7 +257,7 @@ public class ReasonerService implements IReasonerService {
         long cloudduration = stopCloudTime - startCloudTime;
         seconds = ((double)cloudduration / 1000000000);
         if(cloudRequests.size()==0) seconds = 0;
-        clouddeploymentTimes.put(cloudrequestCount, seconds);
+        clouddeploymentTimes.add(new Pair(cloudrequestCount, seconds));
         timeStr = new DecimalFormat("#.##########").format(seconds);
         log.info("cloud service deployment time : " + timeStr + " Seconds for "+cloudrequestCount+ " services");
 
@@ -648,14 +667,6 @@ public class ReasonerService implements IReasonerService {
     public String getEvaluationSummary(){
         String output = "";
 
-        // REQUEST COUNT ANALYSIS
-        // -------------------------------------------------------------------------------------------------------------
-        output += "---- REQUEST COUNT ----<br>";
-        output += "total request count: "+totalRequestCount;
-        output += "<br>cloud request count: "+cloudRequestCount;
-        output += "<br>fog request count: "+(totalRequestCount-cloudRequestCount);
-
-
         // TOTAL DEPLOYMENT TIME ANALYSIS
         // -------------------------------------------------------------------------------------------------------------
         output += "<br><br>---- TOTAL DEPLOYMENT TIME ----<br>";
@@ -697,26 +708,32 @@ public class ReasonerService implements IReasonerService {
         double fogdurationPerRequest;
         double fogdurationPerOrder;
         double fogsumDuration = 0;
-        for(Map.Entry e : fogdeploymentTimes.entrySet()){
+        int totalExecutedFogRequestCount=0;
+        for(Pair e : fogdeploymentTimes){
             // deploymentTime: avg per request, avg general, stdev per request, stdev general, min, max
-            int reqCount = (int) e.getKey();
-            double duration = (double) e.getValue();
-            double preq = duration/(reqCount*1.0);
-            output += reqCount+" fog services deployed in "+duration+" ("+preq+"s/Req) || ";
+            int reqCount = (int) e.key;
 
-            if(duration > fogmaxDuration) fogmaxDuration = duration;
-            if(duration < fogminDuration) fogminDuration = duration;
+            if (reqCount>0) {
+                totalExecutedFogRequestCount+=reqCount;
+                double duration = (double) e.value;
+                double preq = duration/(reqCount*1.0);
 
-            fogsumDuration += duration;
+                output += reqCount+" fog services deployed in "+duration+" ("+preq+"s/Req) || ";
+
+                if(duration > fogmaxDuration) fogmaxDuration = duration;
+                if(duration < fogminDuration) fogminDuration = duration;
+
+                fogsumDuration += duration;
+            }
         }
         output += "<br>max: "+fogmaxDuration+", min: "+fogminDuration;
 
-        if(deploymentTimes.size() > 0) {
+        if(fogdeploymentTimes.size() > 0) {
             fogdurationPerOrder = fogsumDuration / fogdeploymentTimes.size();
             output += "<br>per application: " + fogdurationPerOrder;
         }
-        if(fogRequestCount > 0) {
-            fogdurationPerRequest = fogsumDuration / fogRequestCount;
+        if(totalExecutedFogRequestCount > 0) {
+            fogdurationPerRequest = fogsumDuration / totalExecutedFogRequestCount;
             output += "<br>per fog service: " + fogdurationPerRequest;
         }
 
@@ -729,17 +746,21 @@ public class ReasonerService implements IReasonerService {
         double clouddurationPerRequest;
         double clouddurationPerOrder;
         double cloudsumDuration = 0;
-        for(Map.Entry e : clouddeploymentTimes.entrySet()){
+        int totalExecutedCloudRequestCount=0;
+        for(Pair e : clouddeploymentTimes){
             // deploymentTime: avg per request, avg general, stdev per request, stdev general, min, max
-            int reqCount = (int) e.getKey();
-            double duration = (double) e.getValue();
-            double preq = duration/(reqCount*1.0);
-            output += reqCount+" cloud services deployed in "+duration+" ("+preq+"s/Req) || ";
+            int reqCount = (int) e.key;
+            if (reqCount>0) {
+                totalExecutedCloudRequestCount += reqCount;
+                double duration = (double) e.value;
+                double preq = duration / (reqCount * 1.0);
+                output += reqCount + " cloud services deployed in " + duration + " (" + preq + "s/Req) || ";
 
-            if(duration > cloudmaxDuration) cloudmaxDuration = duration;
-            if(duration < cloudminDuration) cloudminDuration = duration;
+                if (duration > cloudmaxDuration) cloudmaxDuration = duration;
+                if (duration < cloudminDuration) cloudminDuration = duration;
 
-            cloudsumDuration += duration;
+                cloudsumDuration += duration;
+            }
         }
         output += "<br>max: "+cloudmaxDuration+", min: "+cloudminDuration;
 
@@ -747,10 +768,17 @@ public class ReasonerService implements IReasonerService {
             clouddurationPerOrder = cloudsumDuration / clouddeploymentTimes.size();
             output += "<br>per application: " + clouddurationPerOrder;
         }
-        if(cloudRequestCount > 0) {
-            clouddurationPerRequest = cloudsumDuration / cloudRequestCount;
+        if(totalExecutedCloudRequestCount > 0) {
+            clouddurationPerRequest = cloudsumDuration / totalExecutedCloudRequestCount;
             output += "<br>per cloud service: " + clouddurationPerRequest;
         }
+
+        // REQUEST COUNT ANALYSIS
+        // -------------------------------------------------------------------------------------------------------------
+        output += "<br><br>---- REQUEST COUNT ----<br>";
+        output += "total request count: "+totalRequestCount;
+        output += "<br>cloud request count: "+totalExecutedCloudRequestCount;
+        output += "<br>fog request count: "+totalExecutedFogRequestCount;
 
         return  output;
     }

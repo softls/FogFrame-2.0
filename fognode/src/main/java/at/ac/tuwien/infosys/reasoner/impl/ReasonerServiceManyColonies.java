@@ -26,7 +26,7 @@ import java.util.*;
  */
 
 @Service
-@Primary
+
 @Slf4j
 public class ReasonerServiceManyColonies implements IReasonerService {
 
@@ -74,14 +74,28 @@ public class ReasonerServiceManyColonies implements IReasonerService {
      */
     private boolean isReplanning = false;
 
+    // a class for tracking deployment time of a number of services, not unique keys, keys- number of services, value- seconds
+    private class Pair
+    {
+        public Integer key;
+        public Double value;
+
+        public Pair(Integer key, Double value)
+        {
+            this.key = key;
+            this.value = value;
+        }
+
+    }
+
     // EVALUATION METRICS
     // +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
     private int totalRequestCount = 0;
     private int neighborApplicationCount=0;
     private int cloudRequestCount = 0;
     private HashMap<Application, Double> deploymentTimes = new HashMap<Application, Double>();
-    private HashMap<Integer, Double> fogdeploymentTimes = new HashMap<Integer, Double>();
-    private HashMap<Integer, Double> clouddeploymentTimes = new HashMap<Integer, Double>();
+    private List<Pair> fogdeploymentTimes = new ArrayList<>();
+    private List<Pair> clouddeploymentTimes = new ArrayList<>();
     // +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
     // EVALUATION METRICS
 
@@ -108,13 +122,18 @@ public class ReasonerServiceManyColonies implements IReasonerService {
 
                 final ApplicationAssignment assignment = deployServices(requests, children);
                 if(assignment == null){
-                    //return new Message(Constants.URL_TASK_REQUESTS, false);
-                    log.info("------- Sending application to the neighbor colony. Getting the closest neighbor -------");
-                    neighborApplicationCount ++;
-                    Fogdevice closestNeighbor = dbService.getClosestNeighborFN();
-                    if(closestNeighbor != null)
-                        log.info("-- Propagating task requests to the closest neighbor FN "+closestNeighbor.getIp()+":"+closestNeighbor.getPort());
-                    return propagateTaskRequestsToNeighborFN(application);
+                    {
+                        //return new Message(Constants.URL_TASK_REQUESTS, false);
+                        log.info("------- Applicaton was not assigned -------");
+                        log.info("------- Sending application to the neighbor colony. Getting the closest neighbor -------");
+                        neighborApplicationCount++;
+                        Fogdevice closestNeighbor = dbService.getClosestNeighborFN();
+                        if (closestNeighbor != null)
+                            log.info("-- Propagating task requests to the closest neighbor FN " + closestNeighbor.getIp() + ":" + closestNeighbor.getPort());
+                        return propagateTaskRequestsToNeighborFN(application);
+
+
+                    }
                 }
 
                 // propagation to the closets FN
@@ -125,12 +144,15 @@ public class ReasonerServiceManyColonies implements IReasonerService {
                 if (assignment.getOpenRequests().size()>0)
                 {
                     stopFailedApplicationServices(assignment);
+                    log.info("------- Some services cannot be assigned -------");
                     log.info("------- Sending application to the neighbor colony. Getting the closest neighbor -------");
-                    neighborApplicationCount ++;
+                    neighborApplicationCount++;
                     Fogdevice closestNeighbor = dbService.getClosestNeighborFN();
-                    if(closestNeighbor != null)
-                        log.info("-- Propagating task requests to the closest neighbor FN "+closestNeighbor.getIp()+":"+closestNeighbor.getPort());
+                    if (closestNeighbor != null)
+                        log.info("-- Propagating task requests to the closest neighbor FN " + closestNeighbor.getIp() + ":" + closestNeighbor.getPort());
                     return propagateTaskRequestsToNeighborFN(application);
+
+
                 }
 
                 // save the application assignment
@@ -176,6 +198,7 @@ public class ReasonerServiceManyColonies implements IReasonerService {
         }
 
     }
+
 
 
     /**
@@ -246,7 +269,7 @@ public class ReasonerServiceManyColonies implements IReasonerService {
         long stopFogTime = System.nanoTime();
         long fogduration = stopFogTime - startFogTime;
         double seconds = ((double)fogduration / 1000000000);
-        fogdeploymentTimes.put(fogrequestCount, seconds);
+        fogdeploymentTimes.add(new Pair(fogrequestCount, seconds));
         String timeStr = new DecimalFormat("#.##########").format(seconds);
         log.info("fog service deployment time : " + timeStr + " Seconds for "+fogrequestCount+ " services");
 
@@ -280,7 +303,7 @@ public class ReasonerServiceManyColonies implements IReasonerService {
         long cloudduration = stopCloudTime - startCloudTime;
         seconds = ((double)cloudduration / 1000000000);
         if(cloudRequests.size()==0) seconds = 0;
-        clouddeploymentTimes.put(cloudrequestCount, seconds);
+        clouddeploymentTimes.add(new Pair(cloudrequestCount, seconds));
         timeStr = new DecimalFormat("#.##########").format(seconds);
         log.info("cloud service deployment time : " + timeStr + " Seconds for "+cloudrequestCount+ " services");
 
@@ -746,12 +769,6 @@ public class ReasonerServiceManyColonies implements IReasonerService {
     public String getEvaluationSummary(){
         String output = "";
 
-        // REQUEST COUNT ANALYSIS
-        // -------------------------------------------------------------------------------------------------------------
-        output += "---- REQUEST COUNT ----<br>";
-        output += "total request count: "+totalRequestCount;
-        output += "<br>cloud request count: "+cloudRequestCount;
-        output += "<br>fog request count: "+(totalRequestCount-cloudRequestCount);
 
 
         // TOTAL DEPLOYMENT TIME ANALYSIS
@@ -799,26 +816,29 @@ public class ReasonerServiceManyColonies implements IReasonerService {
         double fogdurationPerOrder;
         double fogsumDuration = 0;
         int totalExecutedFogRequestCount=0;
-        for(Map.Entry e : fogdeploymentTimes.entrySet()){
+        for(Pair e : fogdeploymentTimes){
             // deploymentTime: avg per request, avg general, stdev per request, stdev general, min, max
-            int reqCount = (int) e.getKey();
-            totalExecutedFogRequestCount+=reqCount;
-            double duration = (double) e.getValue();
-            double preq = duration/(reqCount*1.0);
-            output += reqCount+" fog services deployed in "+duration+" ("+preq+"s/Req) || ";
+            int reqCount = (int) e.key;
+            if (reqCount>0) {
+                totalExecutedFogRequestCount+=reqCount;
+                double duration = (double) e.value;
+                double preq = duration/(reqCount*1.0);
 
-            if(duration > fogmaxDuration) fogmaxDuration = duration;
-            if(duration < fogminDuration) fogminDuration = duration;
+                output += reqCount+" fog services deployed in "+duration+" ("+preq+"s/Req) || ";
 
-            fogsumDuration += duration;
+                if(duration > fogmaxDuration) fogmaxDuration = duration;
+                if(duration < fogminDuration) fogminDuration = duration;
+
+                fogsumDuration += duration;
+            }
         }
         output += "<br>max: "+fogmaxDuration+", min: "+fogminDuration;
 
-        if(deploymentTimes.size() > 0) {
+        if(fogdeploymentTimes.size() > 0) {
             fogdurationPerOrder = fogsumDuration / fogdeploymentTimes.size();
             output += "<br>per application: " + fogdurationPerOrder;
         }
-        if(fogRequestCount > 0) {
+        if(totalExecutedFogRequestCount > 0) {
             fogdurationPerRequest = fogsumDuration / totalExecutedFogRequestCount;
             output += "<br>per fog service: " + fogdurationPerRequest;
         }
@@ -833,18 +853,20 @@ public class ReasonerServiceManyColonies implements IReasonerService {
         double clouddurationPerOrder;
         double cloudsumDuration = 0;
         int totalExecutedCloudRequestCount=0;
-        for(Map.Entry e : clouddeploymentTimes.entrySet()){
+        for(Pair e : clouddeploymentTimes){
             // deploymentTime: avg per request, avg general, stdev per request, stdev general, min, max
-            int reqCount = (int) e.getKey();
-            totalExecutedCloudRequestCount+=reqCount;
-            double duration = (double) e.getValue();
-            double preq = duration/(reqCount*1.0);
-            output += reqCount+" cloud services deployed in "+duration+" ("+preq+"s/Req) || ";
+            int reqCount = (int) e.key;
+            if (reqCount>0) {
+                totalExecutedCloudRequestCount += reqCount;
+                double duration = (double) e.value;
+                double preq = duration / (reqCount * 1.0);
+                output += reqCount + " cloud services deployed in " + duration + " (" + preq + "s/Req) || ";
 
-            if(duration > cloudmaxDuration) cloudmaxDuration = duration;
-            if(duration < cloudminDuration) cloudminDuration = duration;
+                if (duration > cloudmaxDuration) cloudmaxDuration = duration;
+                if (duration < cloudminDuration) cloudminDuration = duration;
 
-            cloudsumDuration += duration;
+                cloudsumDuration += duration;
+            }
         }
         output += "<br>max: "+cloudmaxDuration+", min: "+cloudminDuration;
 
@@ -852,11 +874,20 @@ public class ReasonerServiceManyColonies implements IReasonerService {
             clouddurationPerOrder = cloudsumDuration / clouddeploymentTimes.size();
             output += "<br>per application: " + clouddurationPerOrder;
         }
-        if(cloudRequestCount > 0) {
+        if(totalExecutedCloudRequestCount > 0) {
             clouddurationPerRequest = cloudsumDuration / totalExecutedCloudRequestCount;
             output += "<br>per cloud service: " + clouddurationPerRequest;
         }
 
+        // REQUEST COUNT ANALYSIS
+        // -------------------------------------------------------------------------------------------------------------
+        output += "<br><br>---- REQUEST COUNT ----<br>";
+        output += "total request count: "+totalRequestCount;
+        output += "<br>cloud request count: "+totalExecutedCloudRequestCount;
+        output += "<br>fog request count: "+totalExecutedFogRequestCount;
+
         return  output;
+
+
     }
 }

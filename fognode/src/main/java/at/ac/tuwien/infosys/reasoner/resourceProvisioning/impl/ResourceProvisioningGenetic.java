@@ -27,7 +27,7 @@ import java.util.Set;
 /**
  * Created by olena on 12/13/17.
  */
-@Primary
+
 @Service
 @Slf4j
 public class ResourceProvisioningGenetic implements IResourceProvisioning {

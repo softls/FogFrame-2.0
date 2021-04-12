@@ -18,6 +18,7 @@ import java.util.UUID;
 
 /**
  * Created by Kevin Bachmann on 03/11/2016.
+ * Modified by Olena Skarlat
  * Service to setup the basic features of a component, e.g., basic database content, etc.
  */
 @Service

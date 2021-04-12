@@ -22,6 +22,7 @@ import java.util.*;
 /**
  * Created by olena on 11/22/17.
  * IBM CPLEX DOES NOT WORK ON RASPBERRY PI!!! BECAUSE THEY DON"T HAVE ARM BINARIES, only for INTEX x86-64!!!
+ * Works only with Intel architecture
  */
 
 @Service

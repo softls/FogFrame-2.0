@@ -1,0 +1,19 @@
+{
+  "ignition": {
+    "config": {},
+    "timeouts": {},
+    "version": "2.3.0"
+  },
+  "networkd": {},
+  "passwd": {},
+  "storage": {},
+  "systemd": {
+    "units": [
+      {
+        "contents": "[Unit]\nDescription=Docker Socket for the API\n\n[Socket]\nListenStream=2375\nBindIPv6Only=both\nService=docker.service\n\n[Install]\nWantedBy=sockets.target",
+        "enable": true,
+        "name": "docker-tcp.socket"
+      }
+    ]
+  }
+}

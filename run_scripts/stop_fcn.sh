@@ -1,4 +1,4 @@
 #!/usr/bin/env bash
 # run fog device
 # --------------------------------------------------------------------------------------------------------------------
-docker stop fogcontrolnode
+docker stop fognode

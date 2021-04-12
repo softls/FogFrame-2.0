@@ -16,8 +16,9 @@ import java.util.*;
 
 /**
  * Created by Kevin Bachmann on 02/11/2016.
+ * Modified for multiple colonies Olena Skarlat
  */
-
+@Primary
 @Service
 @Slf4j
 public class ResourceProvisioningFirstFit implements IResourceProvisioning {

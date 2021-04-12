@@ -14,6 +14,7 @@ import java.util.Set;
 
 /**
  * Created by Kevin Bachmann on 02/11/2016.
+ * Modified by Olena Skarlat
  * Controller that receives the task requests for further processing by the reasoner service and resource provisioning
  * approach.
  */
@@ -46,7 +47,7 @@ public class ReasonerController {
     }
 
     /**
-     * Testing method to simplify the evaluation
+     * Testing method to simplify the evaluation - experiment 3.1
      * @param countT1 amount of services of type t1
      * @param countT2 amount of services of type t2
      * @param countT3 amount of services of type t3
